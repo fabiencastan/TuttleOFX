@@ -43,7 +43,7 @@ static const char* const kDirectoriesOptionMessage = "handle directories";
 //-e, --expression
 static const char* const kExpressionOptionLongName = "expression";
 static const char* const kExpressionOptionString = "expression,e";
-static const char* const kExpressionOptionMessage = "use a specific pattern, ex: *.jpg,*.png";
+static const char* const kExpressionOptionMessage = "use a specific pattern, ex: \"*.jpg,*.png\"";
 
 //-f, --files
 static const char* const kFilesOptionLongName = "files";

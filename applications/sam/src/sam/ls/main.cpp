@@ -2,7 +2,9 @@
 #include <sam/common/color.hpp>
 #include <sam/common/options.hpp>
 
-#include <tuttle/common/clip/Sequence.hpp>
+#include <tuttle/common/utils/global.hpp>
+
+//#include <tuttle/common/clip/Sequence.hpp>
 
 #include <boost/filesystem/operations.hpp>
 #include <boost/filesystem/exception.hpp>
@@ -11,9 +13,10 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/program_options.hpp>
-#include <boost/shared_ptr.hpp>
+#include <boost/regex.hpp>
 
-#include <Detector.hpp>
+#include <sequence/parser/Browser.h>
+#include <sequence/DisplayUtils.h>
 
 #include <algorithm>
 #include <iostream>
@@ -27,59 +30,95 @@ namespace sam
 {
 	Color _color;
 	bool wasSthgDumped = false;
-}
-
-// A helper function to simplify the main part.
-template<class T>
-std::ostream& operator<<(std::ostream& os, const std::vector<T>& v)
-{
-	copy(v.begin(), v.end(), std::ostream_iterator<T>(std::cout, " "));
-	return os;
-}
-
-template<class T>
-void coutVec( const boost::ptr_vector<T>& v )
-{
-	BOOST_FOREACH( const T& f, v )
+	
+	bool isDotFilename( const bfs::path& p )
 	{
-		std::cout << f << std::endl;
-		sam::wasSthgDumped = true;
+		return p.filename().string().at(0) == '.';
+	}
+	
+	boost::regex convertFilterToRegex( std::string filter )
+	{
+		boost::cmatch match;
+		boost::regex expression( "(.*[%])([0-9]{2})([d].*)" ); // match to pattern like : %04d
+		if( boost::regex_match( filter.c_str(), match, expression ) )
+		{
+			std::string matched = match[1].second;
+			matched.erase( 2 , matched.size()-2); // keep only numbers
+			const int patternWidth = boost::lexical_cast<int>( matched );
+			std::string replacing( patternWidth, '#' );
+			filter = boost::regex_replace( filter, boost::regex( "\\%\\d{1,2}d" ), replacing );
+		}
+	
+		filter = boost::regex_replace( filter, boost::regex( "\\*" ), "(.*)" );
+		filter = boost::regex_replace( filter, boost::regex( "\\?" ), "(.)" );
+		filter = boost::regex_replace( filter, boost::regex( "\\@" ), "[0-9]+" ); // one @ correspond to one or more digits
+		filter = boost::regex_replace( filter, boost::regex( "\\#" ), "[0-9]" ); // each # in pattern correspond to a digit
+		return boost::regex( filter );
+	}
+	
+	std::vector<boost::regex> convertFilterToRegex( const std::vector<std::string>& filters )
+	{
+		std::vector<boost::regex> res;
+		BOOST_FOREACH( const std::string& filter, filters )
+		{
+			res.push_back( convertFilterToRegex( filter ) );
+		}
+		return res;
+	}
+	
+	bool isFilteredFilename( const std::string& filename, const std::vector<boost::regex>& filters )
+	{
+		if( filters.size() == 0 )
+			return false;
+	
+		BOOST_FOREACH( const boost::regex& filter, filters )
+		{
+			if( boost::regex_match( filename, filter ) )
+				return false;
+		}
+		return true;
 	}
 }
-
 
 int main( int argc, char** argv )
 {
 	using namespace tuttle::common;
 	using namespace sam;
 
-	sequenceParser::EMaskType                 researchMask        = sequenceParser::eMaskTypeSequence;  // by default show sequences
-	sequenceParser::EMaskOptions              descriptionMask     = sequenceParser::eMaskOptionsNone;   // by default show nothing
-	bool                                      recursiveListing    = false;
-	bool                                      script              = false;
-	bool                                      enableColor         = false;
-	std::string                               availableExtensions;
-	std::vector<std::string>                  paths;
-	std::vector<std::string>                  filters;
-	sequenceParser::Detector                  detector;
+	typedef std::vector<sequence::BrowseItem> Items;
+
+	bool recursiveListing    = false;
+	bool script              = false;
+	bool enableColor         = false;
+	bool listUnitFile        = false;
+	bool listFolder          = false;
+	bool maskSequences       = false;
+	bool listDotFile         = false; // file starting with a dot (.filename)
+	bool listLongListing     = false;
+	bool listRelativePath    = false;
+	bool listAbsolutePath    = false;
+	
+	//std::string       availableExtensions;
+	std::vector<std::string> paths;
+	std::vector<std::string> filters;
 
 	// Declare the supported options.
 	bpo::options_description mainOptions;
 	mainOptions.add_options()
-		(kAllOptionString            , kAllOptionMessage)
-		(kDirectoriesOptionString    , kDirectoriesOptionMessage)
-		(kExpressionOptionString     , bpo::value<std::string>(), kExpressionOptionMessage)
-		(kFilesOptionString          , kFilesOptionMessage )
-		(kHelpOptionString           , kHelpOptionMessage)
-		(kLongListingOptionString   , kLongListingOptionMessage)
-		(kIgnoreOptionString           , kIgnoreOptionMessage)
-		(kRelativePathOptionString  , kRelativePathOptionMessage)
-		(kRecursiveOptionString      , kRecursiveOptionMessage)
-		(kPathOptionString    , kPathOptionMessage)
-		(kColorOptionString            , kColorOptionMessage)
-		(kFullDisplayOptionString     , kFullDisplayOptionMessage )
-		(kScriptOptionString           , kScriptOptionMessage)
-		(kBriefOptionString            , kBriefOptionMessage)
+		(kAllOptionString          , kAllOptionMessage)
+		(kDirectoriesOptionString  , kDirectoriesOptionMessage)
+		(kExpressionOptionString   , bpo::value<std::string>(), kExpressionOptionMessage)
+		(kFilesOptionString        , kFilesOptionMessage )
+		(kHelpOptionString         , kHelpOptionMessage)
+		(kLongListingOptionString  , kLongListingOptionMessage)
+		(kIgnoreOptionString       , kIgnoreOptionMessage)
+		(kRelativePathOptionString , kRelativePathOptionMessage)
+		(kRecursiveOptionString    , kRecursiveOptionMessage)
+		(kPathOptionString         , kPathOptionMessage)
+		(kColorOptionString        , kColorOptionMessage)
+		(kFullDisplayOptionString  , kFullDisplayOptionMessage )
+		(kScriptOptionString       , kScriptOptionMessage)
+		(kBriefOptionString        , kBriefOptionMessage)
 	;
 	
 	// describe hidden options
@@ -134,7 +173,6 @@ int main( int argc, char** argv )
 	{
 		// disable color, disable directory printing and set relative path by default
 		script = true;
-		descriptionMask |= sequenceParser::eMaskOptionsAbsolutePath;
 	}
 
 	if ( vm.count(kColorOptionLongName) && !script )
@@ -149,7 +187,6 @@ int main( int argc, char** argv )
 
 	if( enableColor )
 	{
-		descriptionMask |= sequenceParser::eMaskOptionsColor;
 		_color.enable();
 	}
 
@@ -185,45 +222,45 @@ int main( int argc, char** argv )
 
 	if (vm.count(kDirectoriesOptionLongName))
 	{
-		researchMask |= sequenceParser::eMaskTypeDirectory;
+		listFolder = true;
 	}
 	
 	if (vm.count(kFilesOptionLongName))
 	{
-		researchMask |= sequenceParser::eMaskTypeFile;
+		listUnitFile = true;
 	}
 	
 	if (vm.count(kIgnoreOptionLongName))
 	{
-		researchMask &= ~sequenceParser::eMaskTypeSequence;
+		maskSequences = true;
 	}
 	
 	if (vm.count(kFullDisplayOptionLongName))
 	{
-		researchMask |= sequenceParser::eMaskTypeDirectory;
-		researchMask |= sequenceParser::eMaskTypeFile;
-		researchMask |= sequenceParser::eMaskTypeSequence;
+		listFolder = true;
+		listUnitFile = true;
+		maskSequences = false;
 	}
-	
+
 	if (vm.count(kAllOptionLongName))
 	{
 		// add .* files
-		descriptionMask |= sequenceParser::eMaskOptionsDotFile;
+		listDotFile = true;
 	}
 	
 	if (vm.count(kLongListingOptionLongName))
 	{
-		descriptionMask |= sequenceParser::eMaskOptionsProperties;
+		listLongListing = true;
 	}
 	
 	if (vm.count(kRelativePathOptionLongName) )
 	{
-		descriptionMask |= sequenceParser::eMaskOptionsPath;
+		listRelativePath = true;
 	}
 
 	if(vm.count(kPathOptionLongName))
 	{
-		descriptionMask |= sequenceParser::eMaskOptionsAbsolutePath;
+		listAbsolutePath = true;
 	}
 	
 	// defines paths, but if no directory specify in command line, we add the current path
@@ -240,51 +277,72 @@ int main( int argc, char** argv )
 	{
 		recursiveListing = true;
 	}
-
-
-// 	for(uint i=0; i<filters.size(); i++)
-// 	  TUTTLE_COUT("filters = " << filters.at(i));
-// 	TUTTLE_COUT("research mask = " << researchMask);
-// 	TUTTLE_COUT("options  mask = " << descriptionMask);
-
-	std::list<boost::shared_ptr<sequenceParser::FileObject> > listing;
+	
+	// build filter into regex expression
+	const std::vector<boost::regex> reFilters = convertFilterToRegex( filters );
+	
 	try
 	{
-		std::size_t index = 0;
 		BOOST_FOREACH( bfs::path path, paths )
 		{
-			if( path == bfs::path(".") )
+			Items items = sequence::parser::browse( path.string().c_str(), recursiveListing );
+			
+			for( Items::iterator item = items.begin(); item != items.end(); item++ )
 			{
-				path = bfs::path("./");
-			}
-			if( ( paths.size() > 1 || recursiveListing ) && !script )
-			{
-				if( index > 0 )
-				{
-					TUTTLE_COUT( "" );
-				}
-				TUTTLE_COUT( path.string() << ":");
-				wasSthgDumped = true;
-			}
-
-			coutVec( detector.fileObjectInDirectory( path.string(), filters, researchMask, descriptionMask ) );
-
-			if(recursiveListing)
-			{
-				for ( bfs::recursive_directory_iterator end, dir( path ); dir != end; ++dir )
-				{
-					if( bfs::is_directory( *dir ) )
+				bfs::path p = (*item).path;
+				if( listRelativePath )
+					p = p.relative_path( );
+				if( listAbsolutePath )
+					p = bfs::absolute( p );
+				
+				switch ((*item).type) {
+					case sequence::FOLDER:
 					{
-						bfs::path currentPath = (bfs::path)*dir;
-						if( !script )
-							TUTTLE_COUT( "\n" << currentPath.string() << ":" );
-
-						coutVec( detector.fileObjectInDirectory( currentPath.string(), filters, researchMask, descriptionMask ) );
-
+						if( listFolder && ( listDotFile || !isDotFilename( p ) ) && ! isFilteredFilename( p.string(), reFilters ) )
+						{
+							std::cout << ( listLongListing ? "d " : "") << _color._blue << p.make_preferred() << _color._std << std::endl;
+							wasSthgDumped = true;
+						}
+						break;
+					}
+					case sequence::UNITFILE:
+					{
+					if( listUnitFile && ( listDotFile || !isDotFilename( p ) ) && ! isFilteredFilename( p.string(), reFilters ) )
+						{
+							std::cout << ( listLongListing ? "f " : "" ) << _color._green << p.make_preferred() << _color._std << std::endl;
+							wasSthgDumped = true;
+						}
+						break;
+					}
+					case sequence::SEQUENCE:
+					{
+						const sequence::Sequence &sequence = (*item).sequence;
+						if( ( listDotFile || !isDotFilename( sequence.pattern.string() ) ) && ! isFilteredFilename( (p / sequence.pattern.string()).string(), reFilters ) )
+						{
+							std::cout << ( listLongListing ? "s " : "" ) << _color._green << (p / sequence.pattern.string()).make_preferred() << _color._std;
+							std::cout << ' ' << sequence.range;
+							if (sequence.step > 1)
+								std::cout << " (" << sequence.step << ')';
+							std::cout << std::endl;
+							wasSthgDumped = true;
+						}
+						break;
+					}
+					case sequence::UNDEFINED:
+					{
+						std::cout << ( listLongListing ? "u " : "" ) << p.string() << std::endl;
+						wasSthgDumped = true;
+						break;
+					}
+					default:
+					{
+						std::cout << ( listLongListing ? "b " : "" ) << p.string() << std::endl;
+						wasSthgDumped = true;
+						//return "!BAD_TYPE!";
+						break;
 					}
 				}
 			}
-			++index;
 		}
 	}
 	catch ( const bfs::filesystem_error& ex)
@@ -296,6 +354,6 @@ int main( int argc, char** argv )
 		TUTTLE_CERR ( boost::current_exception_diagnostic_information() );
 	}
 	if(!wasSthgDumped)
-	        TUTTLE_CERR ( _color._error << "No sequence found here." << _color._std );
+		TUTTLE_CERR ( _color._error << "No sequence found here." << _color._std );
 	return 0;
 }
