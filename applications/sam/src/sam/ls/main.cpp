@@ -317,7 +317,7 @@ int main( int argc, char** argv )
 					case sequence::SEQUENCE:
 					{
 						const sequence::Sequence &sequence = (*item).sequence;
-						if( ( listDotFile || !isDotFilename( sequence.pattern.string() ) ) && ! isFilteredFilename( (p / sequence.pattern.string()).string(), reFilters ) )
+						if( !maskSequences && ( listDotFile || !isDotFilename( sequence.pattern.string() ) ) && ! isFilteredFilename( (p / sequence.pattern.string()).string(), reFilters ) )
 						{
 							std::cout << ( listLongListing ? "s " : "" ) << _color._green << (p / sequence.pattern.string()).make_preferred() << _color._std;
 							std::cout << ' ' << sequence.range;

@@ -68,7 +68,7 @@ static const char* const kInputOptionMessage = "input pathname: directory, file 
 //-I, --ignore =was -m, --mask
 static const char* const kIgnoreOptionLongName = "ignore";
 static const char* const kIgnoreOptionString = "ignore,I";
-static const char* const kIgnoreOptionMessage = "ignore the specified sequence";
+static const char* const kIgnoreOptionMessage = "ignore sequences";
 
 //-l, --long-listing
 static const char* const kLongListingOptionLongName = "long-listing";
