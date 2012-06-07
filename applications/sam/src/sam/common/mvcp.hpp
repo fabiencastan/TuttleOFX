@@ -13,7 +13,6 @@
 #include <boost/foreach.hpp>
 #include <boost/program_options.hpp>
 
-
 #include <sequence/parser/Browser.h>
 #include <sequence/DisplayUtils.h>
 
@@ -24,9 +23,13 @@
 #ifndef SAM_MOVEFILES
 #define SAM_MV_OR_CP_OPTIONS    "SAM_CP_OPTIONS"
 #define SAM_TOOL                "sam-cp"
+#define SAM_TOOL_ACTION         "Copy"
+#define SAM_TOOL_ACTION_SMALL   "copy"
 #else
 #define SAM_MV_OR_CP_OPTIONS    "SAM_MV_OPTIONS"
 #define SAM_TOOL                "sam-mv"
+#define SAM_TOOL_ACTION         "Move"
+#define SAM_TOOL_ACTION_SMALL   "move"
 #endif
 
 namespace bfs = boost::filesystem;
@@ -70,6 +73,27 @@ namespace offset {
 		{
 		}
 	};
+}
+
+void convertprintfStyleToUsual( std::string& sequenceName )
+{
+	for( size_t i=0; i< sequenceName.length(); i++ )
+	{
+		if( sequenceName.at(i) == '%' )
+		{
+			if( sequenceName.at( i + 3 ) == 'd' )
+			{
+				std::string value = sequenceName;
+				value.erase( i + 3, value.length() - i - 3 );
+				value.erase( 0, i + 1 );
+				if( isdigit( value.at( 0 ) ) && isdigit( value.at( 1 ) ) )
+				{
+					sequenceName.erase( i, 4 );
+					sequenceName.insert( i, atoi( value.c_str() ), '#' );
+				}
+			}
+		}
+	}
 }
 
 void copy_sequence( const sequence::BrowseItem seq, const sequence::SequencePattern& patternOut, const bfs::path& srcP, const bfs::path& dstP, const offset::Offset& offsetStruct )
@@ -140,17 +164,20 @@ void copy_sequence( const sequence::BrowseItem seq, const sequence::SequencePatt
 		dstPath = dstDir + "/" + prefixOut + numberOut + suffixOut;
 		//TUTTLE_COUT( "copy " << ( srcPath ).make_preferred() << " => " << ( dstPath ).make_preferred() );
 		
-#ifndef SAM_MOVEFILES // copy file(s)
 		if( bfs::exists( dstPath ) )
 		{
-			TUTTLE_CERR( _color._error << "Could not copy: " << dstPath.string( ) << _color._std);
+			TUTTLE_CERR( _color._error << "Could not " SAM_TOOL_ACTION_SMALL ": " << dstPath.string( ) << _color._std);
 		}
 		else
 		{
 			try
 			{
 				//TUTTLE_COUT( "copy " << srcPath << " -> " << dstPath );
+#ifdef SAM_MOVEFILES // copy file(s)
+				bfs::rename( srcPath, dstPath );
+#else
 				bfs::copy_file( srcPath, dstPath );
+#endif
 			}
 			catch (const bpo::error& e)
 			{
@@ -161,28 +188,6 @@ void copy_sequence( const sequence::BrowseItem seq, const sequence::SequencePatt
 				TUTTLE_CERR( _color._error << boost::current_exception_diagnostic_information( ) << _color._std);
 			}
 		}
-#else // move file(s)
-		if( bfs::exists( dstPath ) )
-		{
-			TUTTLE_CERR( _color._error << "Could not move: " << dstPath.string( ) << _color._std );
-		}
-		else
-		{
-			try
-			{
-				//TUTTLE_COUT( "move " << srcPath << " -> " << dstPath );
-				bfs::rename( srcPath, dstPath );
-			}
-			catch( const bpo::error& e )
-			{
-				TUTTLE_CERR( _color._error << "error : " << e.what() << _color._std );
-			}
-			catch( ... )
-			{
-				TUTTLE_CERR( _color._error << boost::current_exception_diagnostic_information( ) << _color._std );
-			}
-		}
-#endif
 		if( seq.sequence.step != 1 )
 		{
 			idx += seq.sequence.step - 1;
@@ -197,8 +202,6 @@ int sammvcp(int argc, char** argv)
 	std::vector<std::string> paths;
 	std::vector<std::string> filters;
 	
-	std::string  availableExtensions;
-	std::string  outputPattern;
 	bool         verbose          = false;
 	bool         recursiveListing = false;
 	bool         listDotFile      = false; // file starting with a dot (.filename)
@@ -209,14 +212,14 @@ int sammvcp(int argc, char** argv)
 	bpo::options_description mainOptions;
 	mainOptions.add_options()
 			( kHelpOptionString,        kHelpOptionMessage )
-			( kOffsetOptionString,      bpo::value<std::ssize_t>(), kOffsetOptionMessage )
 			//		( "force,f"     , bpo::value<bool>( )        , "if a destination file exists, replace it" )
+			( kOffsetOptionString,      bpo::value<std::ssize_t>(), kOffsetOptionMessage )
+			( kRecursiveOptionString,   kRecursiveOptionMessage)
 			( kVerboseOptionString,     kVerboseOptionMessage )
 			( kInputFirstOptionString,  bpo::value<std::ssize_t>(), kInputFirstOptionMessage )
 			( kInputLastOptionString,   bpo::value<std::ssize_t>(), kInputLastOptionMessage )
 			( kOutputFirstOptionString, bpo::value<std::ssize_t>(), kOutputFirstOptionMessage )
 			( kOutputLastOptionString,  bpo::value<std::ssize_t>(), kOutputLastOptionMessage )
-			(kRecursiveOptionString,    kRecursiveOptionMessage)
 			( kColorOptionString,       kColorOptionMessage )
 			( kBriefOptionString,       kBriefOptionMessage );
 	
@@ -286,11 +289,7 @@ int sammvcp(int argc, char** argv)
 	
 	if (vm.count(kBriefOptionLongName))
 	{
-#ifndef SAM_MOVEFILES
-		TUTTLE_COUT( _color._green << "copy sequence(s) in a directory" << _color._std);
-#else
-		TUTTLE_COUT( _color._green << "move sequence(s) in a directory" << _color._std );
-#endif
+		TUTTLE_COUT( _color._green << SAM_TOOL_ACTION_SMALL " sequence(s) in a directory" << _color._std);
 		return 0;
 	}
 	
@@ -301,53 +300,39 @@ int sammvcp(int argc, char** argv)
 			TUTTLE_COUT( _color._error << "Two sequences and/or directories must be specified." << _color._std);
 		
 		TUTTLE_COUT( _color._blue << "TuttleOFX project [http://sites.google.com/site/tuttleofx]" << _color._std << std::endl);
-#ifndef SAM_MOVEFILES
-		TUTTLE_COUT( _color._blue <<"NAME" << _color._std);
-		TUTTLE_COUT( _color._green << "\tsam-cp - copy sequence(s) in a directory" << _color._std << std::endl);
-		TUTTLE_COUT( _color._blue << "SYNOPSIS" << _color._std);
-		TUTTLE_COUT( _color._green << "\tsam-cp [options] sequence[s] [outputDirectory][outputSequence]" << _color._std << std::endl);
-#else
 		TUTTLE_COUT( _color._blue << "NAME" << _color._std );
-		TUTTLE_COUT( _color._green << "\tsam-mv - move sequence(s) in a directory" << _color._std << std::endl );
+		TUTTLE_COUT( _color._green << "\t" SAM_TOOL " - " SAM_TOOL_ACTION_SMALL " sequence(s) in a directory" << _color._std << std::endl );
 		TUTTLE_COUT( _color._blue << "SYNOPSIS" << _color._std );
-		TUTTLE_COUT( _color._green << "\tsam-mv [options] sequence[s] [outputDirectory][outputSequence]" << _color._std << std::endl );
-#endif
+		TUTTLE_COUT( _color._green << "\t" SAM_TOOL " [options] [inputDirector[y/ies]][sequence[s]] [outputDirectory][outputSequence]" << _color._std << std::endl );
 		TUTTLE_COUT( _color._blue << "DESCRIPTION" << _color._std << std::endl);
-#ifndef SAM_MOVEFILES
-		TUTTLE_COUT( "Copy sequence of image files, and could remove trees (folder, files and sequences)." << std::endl);
-#else
-		TUTTLE_COUT( "Move sequence of image files, and could remove trees (folder, files and sequences)." << std::endl );
-#endif
+		TUTTLE_COUT( SAM_TOOL_ACTION " sequence of image files, and could remove trees (folder, files and sequences)." << std::endl);
 		TUTTLE_COUT( _color._blue << "OPTIONS" <<_color._std);
 		TUTTLE_COUT( mainOptions);
 		/////Examples
 		
 		TUTTLE_COUT( _color._blue << "EXAMPLES" << _color._std << std::left);
-		SAM_EXAMPLE_TITLE_COUT( "Sequence possible definitions: ");
-		SAM_EXAMPLE_LINE_COUT("Auto-detect padding : ", "seq.@.jpg");
-		SAM_EXAMPLE_LINE_COUT("Padding of 8 (usual style): ", "seq.########.jpg");
-		SAM_EXAMPLE_LINE_COUT("Padding of 8 (printf style): ", "seq.%08d.jpg");
-#ifndef SAM_MOVEFILES
-		SAM_EXAMPLE_TITLE_COUT( "Copy a sequence: ");
-		SAM_EXAMPLE_LINE_COUT("", "sam-cp /path/to/sequence/seq.@.jpg  /path/to/sequence_copy/");
-		SAM_EXAMPLE_LINE_COUT("", "sam-cp /path/to/sequence/seq.@.jpg  /path/to/sequences_copy/seq.@.jpg");
-		SAM_EXAMPLE_TITLE_COUT( "Copy and rename a sequence: ");
-		SAM_EXAMPLE_LINE_COUT("", "sam-cp /path/to/sequence/seq.@.jpg  /path/to/sequence_copy/seq_copy.@.jpg ");
-		SAM_EXAMPLE_TITLE_COUT( "Copy a part of sequence: ");
-		SAM_EXAMPLE_LINE_COUT("", "sam-cp /path/to/sequence/seq.@.jpg  /path/to/sequence_copy/ --input-first 677837 --input-last 677838");
+		SAM_EXAMPLE_TITLE_COUT( "Sequence possible definitions: " );
+		//SAM_EXAMPLE_LINE_COUT ( "Auto-detect padding : ", "seq.@.jpg" );
+		SAM_EXAMPLE_LINE_COUT ( "Padding of 8 (usual style): ", "seq.########.jpg" );
+		SAM_EXAMPLE_LINE_COUT ( "Padding of 8 (printf style): ", "seq.%08d.jpg" );
+		SAM_EXAMPLE_TITLE_COUT( SAM_TOOL_ACTION " a sequence: " );
+		SAM_EXAMPLE_LINE_COUT ( "", SAM_TOOL " /path/to/sequence/seq.@.jpg  /path/to/sequence_" SAM_TOOL_ACTION_SMALL "/" );
+		SAM_EXAMPLE_LINE_COUT ( "", SAM_TOOL " /path/to/sequence/seq.@.jpg  /path/to/sequences_" SAM_TOOL_ACTION_SMALL "/seq.@.jpg" );
+		SAM_EXAMPLE_TITLE_COUT( SAM_TOOL_ACTION " a folder of sequences: " );
+		SAM_EXAMPLE_LINE_COUT ( "", SAM_TOOL " /path/to/sequence/  /path/to/sequence_" SAM_TOOL_ACTION_SMALL "/" );
+		SAM_EXAMPLE_TITLE_COUT( SAM_TOOL_ACTION " and rename a sequence: " );
+		SAM_EXAMPLE_LINE_COUT ( "", SAM_TOOL " /path/to/sequence/seq.@.jpg  /path/to/sequence_" SAM_TOOL_ACTION_SMALL "/new_seq.@.jpg" );
+		SAM_EXAMPLE_TITLE_COUT( SAM_TOOL_ACTION " a part of sequence: " );
+		SAM_EXAMPLE_LINE_COUT ( "", SAM_TOOL " /path/to/sequence/seq.@.jpg  /path/to/sequence_" SAM_TOOL_ACTION_SMALL "/ --input-first 55" );
+		SAM_EXAMPLE_LINE_COUT ( "", SAM_TOOL " /path/to/sequence/seq.@.jpg  /path/to/sequence_" SAM_TOOL_ACTION_SMALL "/ --input-last 152" );
+		SAM_EXAMPLE_LINE_COUT ( "", SAM_TOOL " /path/to/sequence/seq.@.jpg  /path/to/sequence_" SAM_TOOL_ACTION_SMALL "/ --input-first 677837 --input-last 677838" );
 		SAM_EXAMPLE_TITLE_COUT( "Renumber a sequence: ");
-		SAM_EXAMPLE_LINE_COUT("", "sam-cp /path/to/sequence/seq.@.jpg  /path/to/sequence_copy/ --output-first 0");
-#else
-		SAM_EXAMPLE_TITLE_COUT( "Move a sequence: ");
-		SAM_EXAMPLE_LINE_COUT("", "sam-mv /path/to/sequence/seq.@.jpg  /path/to/sequence_move/");
-		SAM_EXAMPLE_LINE_COUT("", "sam-mv /path/to/sequence/seq.@.jpg  /path/to/sequences_move/seq.@.jpg");
-		SAM_EXAMPLE_TITLE_COUT( "Move and rename a sequence: ");
-		SAM_EXAMPLE_LINE_COUT("", "sam-mv /path/to/sequence/seq.@.jpg  /path/to/sequence_move/seq_move.@.jpg ");
-		SAM_EXAMPLE_TITLE_COUT( "Move a part of sequence: ");
-		SAM_EXAMPLE_LINE_COUT("", "sam-mv /path/to/sequence/seq.@.jpg  /path/to/sequence_move/ --input-first 677837 --input-last 677838");
-		SAM_EXAMPLE_TITLE_COUT( "Renumber a sequence: ");
-		SAM_EXAMPLE_LINE_COUT("", "sam-mv /path/to/sequence/seq.@.jpg  /path/to/sequence_move/ --output-first 0");
-#endif
+		SAM_EXAMPLE_LINE_COUT ( "", SAM_TOOL " /path/to/sequence/seq.@.jpg  /path/to/sequence_" SAM_TOOL_ACTION_SMALL "/ --offset 10" );
+		SAM_EXAMPLE_LINE_COUT ( "", SAM_TOOL " /path/to/sequence/seq.@.jpg  /path/to/sequence_" SAM_TOOL_ACTION_SMALL "/new_seq.@.jpg --offset 10" );
+		SAM_EXAMPLE_LINE_COUT ( "", SAM_TOOL " /path/to/sequence/seq.@.jpg  /path/to/sequence_" SAM_TOOL_ACTION_SMALL "/ --output-first 0" );
+		SAM_EXAMPLE_LINE_COUT ( "", SAM_TOOL " /path/to/sequence/seq.@.jpg  /path/to/sequence_" SAM_TOOL_ACTION_SMALL "/ --output-last 100" );
+		SAM_EXAMPLE_TITLE_COUT( "Renumber sequences: ");
+		SAM_EXAMPLE_LINE_COUT ( "", SAM_TOOL " /path/to/sequence/  /path/to/sequence_" SAM_TOOL_ACTION_SMALL "/ --offset 10" );
 		return 1;
 	}
 	
@@ -426,10 +411,14 @@ int sammvcp(int argc, char** argv)
 		{
 			if( bfs::extension(srcPath).length() == 4 || bfs::extension(srcPath).length() == 5 )
 			{
+				std::string p = srcPath.string();
+				// convert printf style padding to usual style
+				convertprintfStyleToUsual( p );
+				
 				Items inputItems = sequence::parser::browse( srcPath.parent_path().string().c_str(), false ); // could never be a recurssive research
 				BOOST_FOREACH( const sequence::BrowseItem& item, inputItems )
 				{
-					if( item.type == sequence::SEQUENCE && ( strcmp( srcPath.string().c_str(), ( item.path / item.sequence.pattern.string() ).string().c_str() ) == 0 ) )
+					if( item.type == sequence::SEQUENCE && ( strcmp( p.c_str(), ( item.path / item.sequence.pattern.string() ).string().c_str() ) == 0 ) )
 					{
 						if( bfs::extension(dstPath).length() == 4 || bfs::extension(dstPath).length() == 5 )
 						{
