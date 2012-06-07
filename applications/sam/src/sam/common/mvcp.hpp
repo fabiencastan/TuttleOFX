@@ -138,7 +138,7 @@ void copy_sequence( const sequence::BrowseItem seq, const sequence::SequencePatt
 		
 		srcPath = seq.path / (prefixIn + numberIn + suffixIn);
 		dstPath = dstDir + "/" + prefixOut + numberOut + suffixOut;
-		TUTTLE_COUT( "copy " << ( srcPath ).make_preferred() << " => " << ( dstPath ).make_preferred() );
+		//TUTTLE_COUT( "copy " << ( srcPath ).make_preferred() << " => " << ( dstPath ).make_preferred() );
 		
 #ifndef SAM_MOVEFILES // copy file(s)
 		if( bfs::exists( dstPath ) )
@@ -414,23 +414,6 @@ int sammvcp(int argc, char** argv)
 	
 	bfs::path dstPath = paths.back();
 	paths.pop_back();
-	/*
-	if( !bfs::is_directory( dstPath ) )
-	{
-		if( !dstPath.parent_path().empty() && !bfs::is_directory( dstPath.parent_path() ) )
-		{
-			TUTTLE_CERR( _color._error << "Your destination is not in a valid directory: " << tuttle::quotes(dstPath.string()) << "." << _color._std);
-			return -1;
-		}
-	}
-	else
-	{
-		if( paths.size() > 1 )
-		{
-			TUTTLE_CERR( _color._error << "To copy multiple sequences, your destination must be a directory: " << tuttle::quotes(dstPath.string()) << "." << _color._std);
-			return -1;
-		}
-	}*/
 	
 	if( paths.size() > 0 && bfs::is_directory( paths.at(0) ) && ( bfs::extension(dstPath).length() == 4 || bfs::extension(dstPath).length() == 5 ) )
 	{
