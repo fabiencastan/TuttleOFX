@@ -46,7 +46,7 @@ exe sam-cp :
 		[ glob src/sam/cp/*.cpp ]
 
 		/boost//program_options/<link>static
-
+		$(SEQUENCE_PARSER)/src/sequence/parser//sequence_parser/<link>static
 		/tuttlecommon/<link>static
 	:
 		<os>LINUX:<find-shared-library>dl
@@ -59,7 +59,7 @@ exe sam-mv :
 		[ glob src/sam/mv/*.cpp ]
 
 		/boost//program_options/<link>static
-
+		$(SEQUENCE_PARSER)/src/sequence/parser//sequence_parser/<link>static
 		/tuttlecommon/<link>static
 	:
 		<os>LINUX:<find-shared-library>dl

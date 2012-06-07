@@ -215,12 +215,12 @@ static const char* const kNodesListOptionMessage = "show list of all available n
 //--output-first
 static const char* const kOutputFirstOptionLongName = "output-first";
 static const char* const kOutputFirstOptionString = kOutputFirstOptionLongName;
-static const char* const kOutputFirstOptionMessage = "specify the first output image, in order to select a sub-range of the output sequence";
+static const char* const kOutputFirstOptionMessage = "specify the first output image";
 
 //--output-last
 static const char* const kOutputLastOptionLongName = "output-last";
 static const char* const kOutputLastOptionString = kOutputLastOptionLongName;
-static const char* const kOutputLastOptionMessage = "specify the last output image, in order to select a sub-range of the output sequence";
+static const char* const kOutputLastOptionMessage = "specify the last output image";
 
 //--parameters-list
 static const char* const kParametersOptionLongName = "parameters-list";
