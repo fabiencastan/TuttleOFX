@@ -170,12 +170,12 @@ static const char* const kFirstImageOptionMessage = "specify the first image";
 //--full-display
 static const char* const kFullDisplayOptionLongName = "full-display";
 static const char* const kFullDisplayOptionString = kFullDisplayOptionLongName;
-static const char* const kFullDisplayOptionMessage = "display everything =directories, files, sequences";
+static const char* const kFullDisplayOptionMessage = "display everything: directories, files, sequences";
 
 //--full-rm
 static const char* const kFullRMPathOptionLongName = "full-rm";
 static const char* const kFullRMPathOptionString = kFullRMPathOptionLongName;
-static const char* const kFullRMPathOptionMessage = "remove everything =directories, files, sequences";
+static const char* const kFullRMPathOptionMessage = "remove everything: directories, files, sequences";
 
 //--generator-args
 static const char* const kGeneratorArgsOptionLongName = "generator-args";
