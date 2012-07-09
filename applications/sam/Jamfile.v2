@@ -72,7 +72,7 @@ exe sam-rm :
 		[ glob src/sam/rm/*.cpp ]
 
 		/boost//program_options/<link>static
-
+		$(SEQUENCE_PARSER)/src/sequence/parser//sequence_parser/<link>static
 		/tuttlecommon/<link>static
 	:
 		<os>LINUX:<find-shared-library>dl
