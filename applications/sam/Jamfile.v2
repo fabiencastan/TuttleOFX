@@ -204,6 +204,8 @@ install sam-install-bins
 install sam-install-libs
 	:
 		/boost//python
+		/boost//filesystem
+		/boost//system
 	:
 		<variant>debug:<location>$(DIST_DEBUG)/lib
 		<variant>release:<location>$(DIST_RELEASE)/lib
