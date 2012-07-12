@@ -29,6 +29,11 @@ namespace sam
 {
 	Color _color;
 	bool wasSthgDumped = false;
+	
+	bool sortBrowseItem ( sequence::BrowseItem i,sequence::BrowseItem j )
+	{
+		return ( i.path.string().length() > j.path.string().length() );
+	}
 }
 
 int main( int argc, char** argv )
@@ -237,6 +242,7 @@ int main( int argc, char** argv )
 		BOOST_FOREACH( bfs::path path, paths )
 		{
 			Items items = sequence::parser::browse( path.string().c_str(), recursiveListing );
+			sort( items.begin(), items.end(), sortBrowseItem );
 			
 			for( Items::iterator item = items.begin(); item != items.end(); item++ )
 			{
