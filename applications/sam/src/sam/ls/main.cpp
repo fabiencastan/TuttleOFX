@@ -68,7 +68,7 @@ int main( int argc, char** argv )
 		(kHelpOptionString         , kHelpOptionMessage)
 		(kLongListingOptionString  , kLongListingOptionMessage)
 		(kIgnoreOptionString       , kIgnoreOptionMessage)
-		//(kRelativePathOptionString , kRelativePathOptionMessage)
+		(kRelativePathOptionString , kRelativePathOptionMessage)
 		(kRecursiveOptionString    , kRecursiveOptionMessage)
 		(kPathOptionString         , kPathOptionMessage)
 		(kColorOptionString        , kColorOptionMessage)
@@ -241,16 +241,37 @@ int main( int argc, char** argv )
 	{
 		BOOST_FOREACH( bfs::path path, paths )
 		{
+			//std::cout << path.string().c_str() << std::endl;
 			Items items = sequence::parser::browse( path.string().c_str(), recursiveListing );
 			sort( items.begin(), items.end(), sortBrowseItem );
+			
+			std::string f = path.make_preferred().string();
+			
+			int removeInitialPath = f.length();
+			
+			if( strcmp( path.make_preferred().string().c_str(), "/" ) == 0 )
+				removeInitialPath = 0;
+			
+			if( path.make_preferred().string().at( f.length() - 1 ) != '/' )
+				removeInitialPath += 1;
 			
 			for( Items::iterator item = items.begin(); item != items.end(); item++ )
 			{
 				bfs::path p = (*item).path;
+				std::string itemPath = (*item).path.make_preferred().string();
+				itemPath.erase( itemPath.begin(), itemPath.begin() + removeInitialPath );
+				
+				//std::cout << removeInitialPath << "  " << p.string().c_str() << " => " << itemPath << "."<< std::endl;
 				if( listRelativePath )
+				{
 					p = p.relative_path( );
+					itemPath = p.string();
+				}
 				if( listAbsolutePath )
+				{
 					p = bfs::absolute( p );
+					itemPath = itemPath = p.string();
+				}
 				
 				switch( (*item).type )
 				{
@@ -258,16 +279,16 @@ int main( int argc, char** argv )
 					{
 						if( listFolder && ( listDotFile || !isDotFilename( p ) ) && ! isFilteredFilename( p.string(), reFilters ) )
 						{
-							std::cout << ( listLongListing ? "d " : "") << _color._blue << p.make_preferred() << _color._std << std::endl;
+							std::cout << ( listLongListing ? "d " : "") << _color._blue << itemPath << "/" << _color._std << std::endl;
 							wasSthgDumped = true;
 						}
 						break;
 					}
 					case sequence::UNITFILE:
 					{
-					if( listUnitFile && ( listDotFile || !isDotFilename( p ) ) && ! isFilteredFilename( p.string(), reFilters ) )
+						if( listUnitFile && ( listDotFile || !isDotFilename( p ) ) && ! isFilteredFilename( p.string(), reFilters ) )
 						{
-							std::cout << ( listLongListing ? "f " : "" ) << _color._green << p.make_preferred() << _color._std << std::endl;
+							std::cout << ( listLongListing ? "f " : "" ) << _color._green << itemPath << _color._std << std::endl;
 							wasSthgDumped = true;
 						}
 						break;
@@ -277,7 +298,7 @@ int main( int argc, char** argv )
 						const sequence::Sequence &sequence = (*item).sequence;
 						if( !maskSequences && ( listDotFile || !isDotFilename( sequence.pattern.string() ) ) && ! isFilteredFilename( (p / sequence.pattern.string()).string(), reFilters ) )
 						{
-							std::cout << ( listLongListing ? "s " : "" ) << _color._green << (p / sequence.pattern.string()).make_preferred() << _color._std;
+							std::cout << ( listLongListing ? "s " : "" ) << _color._green << itemPath << "/" << sequence.pattern.string() << _color._std;
 							std::cout << ' ' << sequence.range;
 							if (sequence.step > 1)
 								std::cout << " (" << sequence.step << ')';
