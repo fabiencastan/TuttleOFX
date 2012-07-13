@@ -1,6 +1,7 @@
 #include <sam/common/utility.hpp>
 #include <sam/common/color.hpp>
 #include <sam/common/options.hpp>
+#include <sam/common/filter.hpp>
 
 #include <tuttle/common/exceptions.hpp>
 
@@ -12,6 +13,7 @@
 #include <boost/algorithm/string/split.hpp>
 #include <boost/program_options.hpp>
 #include <boost/shared_ptr.hpp>
+#include <boost/regex.hpp>
 
 #include <sequence/parser/Browser.h>
 #include <sequence/DisplayUtils.h>
@@ -26,13 +28,21 @@ namespace bal = boost::algorithm;
 namespace ttl = tuttle::common;
 using namespace tuttle::common;
 
+typedef std::vector<sequence::BrowseItem> Items;
+
 bool    enableColor    = false;
 bool    verbose        = false;
 bool    selectRange    = false;
 ssize_t firstImage     = 0;
 ssize_t lastImage      = 0;
 
-sam::Color _color;
+namespace sam
+{
+	Color _color;
+	bool wasSthgDumped = false;
+	
+	bool sortBrowseItem ( sequence::BrowseItem i,sequence::BrowseItem j ) { return (i.path.string().length() > j.path.string().length() ); }
+}
 
 // A helper function to simplify the main part.
 template<class T>
@@ -41,109 +51,58 @@ std::ostream& operator<<(std::ostream& os, const std::vector<T>& v)
 	copy(v.begin(), v.end(), std::ostream_iterator<T>(std::cout, " "));
 	return os;
 }
-/*
-void removeSequence( const ttl::Sequence& s )
-{
-	std::ssize_t first;
-	std::ssize_t last;
-	if( selectRange )
-	{
-		first = std::max( s.getFirstTime(), firstImage );
-		last  = std::min( s.getLastTime(), lastImage );
-	}
-	else
-	{
-		first = s.getFirstTime();
-		last  = s.getLastTime();
-	}
-//	TUTTLE_TCOUT( "remove sequence." );
-//	TUTTLE_TCOUT("remove from " << first << " to " << last);
 
-	for( ttl::Sequence::Time t = first; t <= last; t += s.getStep() )
-	{
-		bfs::path sFile = s.getAbsoluteFilenameAt(t);
-		if( !bfs::exists( sFile ) )
-		{
-			TUTTLE_CERR("Could not remove (file not exist): " << _color._red << sFile.string() << _color._std );
-		}
-		else
-		{
-			if(verbose)
-			{
-				TUTTLE_COUT("remove: " << _color._folder << sFile.string() << _color._std );
-			}
-			try
-			{
-				bfs::remove( sFile );
-			}
-			catch(const boost::filesystem::filesystem_error& e)
-			{
-//			   if( e.code() == boost::system::errc::permission_denied )
-//				   "permission denied"
-				TUTTLE_CERR( "sam-rm: Error:\t\n" << e.what() );
-				/// @todo cin
-//				TUTTLE_COUT( "sam-rm: Continue ? (Yes/No/Yes for All/No for All)" );
-				
-			}
-		}
-	}
-}
-
-void removeFileObject( std::list<boost::shared_ptr<ttl::FileObject> > &listing, std::vector<boost::filesystem::path> &notRemoved )
+void removeFiles( Items &items, const std::vector<boost::regex> reFilters, bool removeFolder, bool removeUnitFile, bool removeSequence, bool removeDotFile )
 {
-//	TUTTLE_TCOUT( "removeFileObject." );
-	BOOST_FOREACH( const std::list< boost::shared_ptr<ttl::FileObject> >::value_type & s, listing )
+	for( Items::iterator item = items.begin(); item != items.end(); item++ )
 	{
-		if( !(s->getMaskType () == ttl::eMaskTypeDirectory))
+		bfs::path p = (*item).path;
+		
+		switch( (*item).type )
 		{
-			if(verbose)
-				TUTTLE_COUT( "remove: " << *s );
-			if( s->getMaskType () == ttl::eMaskTypeSequence )
-				removeSequence( (ttl::Sequence&) *s );
-			else
+			case sequence::FOLDER:
 			{
-				std::vector<bfs::path> paths = s->getFiles();
-				for(unsigned int i=0; i<paths.size(); i++)
-					bfs::remove( paths.at(i) );
-			}
-		}
-		else // is a directory
-		{
-			std::vector<boost::filesystem::path> paths = s->getFiles();
-			for(unsigned int i=0; i<paths.size(); i++)
-			{
-				if( bfs::is_empty( paths.at(i) ) )
+				if( removeFolder && ( removeDotFile || !sam::isDotFilename( p ) ) && ! sam::isFilteredFilename( p.string(), reFilters ) )
 				{
-					if(verbose)
-						TUTTLE_COUT( "remove: " << *s );
-					bfs::remove( paths.at(i) );
+					if( verbose )
+						TUTTLE_COUT( sam::_color._blue << p.make_preferred() << sam::_color._std );
+					bfs::remove( p );
 				}
-				else
-				{
-					notRemoved.push_back( paths.at(i) );
-				}
+				break;
 			}
-		}
-	}
-}*/
-
-void removeFiles( std::vector<boost::filesystem::path> &listing )
-{
-	std::sort(listing.begin(), listing.end());
-	std::reverse(listing.begin(), listing.end());
-	BOOST_FOREACH( const boost::filesystem::path& paths, listing )
-	{
-		if(bfs::is_empty(paths))
-		{
-			if(verbose)
+			case sequence::UNITFILE:
 			{
-				TUTTLE_COUT( "remove: " << _color._folder << paths << _color._std );
+				if( removeUnitFile && ( removeDotFile || !sam::isDotFilename( p ) ) && ! sam::isFilteredFilename( p.string(), reFilters ) )
+				{
+					if( verbose )
+						TUTTLE_COUT( sam::_color._green << p.make_preferred() << sam::_color._std );
+					bfs::remove( p );
+				}
+				break;
 			}
-			bfs::remove(paths);
-		}
-		else
-		{
-			TUTTLE_CERR( "could not remove " << _color._error << paths << _color._std );
+			case sequence::SEQUENCE:
+			{
+				const sequence::Sequence &sequence = (*item).sequence;
+				if( removeSequence && ( removeDotFile || !sam::isDotFilename( sequence.pattern.string() ) ) && ! sam::isFilteredFilename( (p / sequence.pattern.string()).string(), reFilters ) )
+				{
+					if( verbose )
+						TUTTLE_COUT( sam::_color._green << (p / sequence.pattern.string()).make_preferred() << sam::_color._std );
+					
+					for( size_t index = sequence.range.first; index <= sequence.range.last; index += sequence.step )
+					{
+						bfs::path filename = p / sequence::instanciatePattern( sequence.pattern, index );
+						bfs::remove( filename );
+					}
+					
+				}
+				break;
+			}
+			case sequence::UNDEFINED:
+			default:
+			{
+				std::cout << sam::_color._red << "error: undefined " << p.string() << sam::_color._std << std::endl;
+				break;
+			}
 		}
 	}
 }
@@ -155,7 +114,6 @@ int main( int argc, char** argv )
 	using namespace sam;
 
 	bool recursiveListing    = false;
-	bool verbose             = false;
 	bool removeUnitFile      = false;
 	bool removeFolder        = false;
 	bool removeSequences     = true;
@@ -347,60 +305,42 @@ int main( int argc, char** argv )
 	{
 		recursiveListing = true;
 	}
-	// 	for(unsigned int i=0; i<filters.size(); i++)
-	// 	TUTTLE_COUT("filters = " << filters.at(i));
-	// 	TUTTLE_COUT("research mask = " << researchMask);
-	// 	TUTTLE_COUT("options  mask = " << descriptionMask);
-
+	
+	std::vector<boost::regex> reFilters = convertFilterToRegex( filters );
+	
 	try
 	{
-		std::vector<boost::filesystem::path> pathsNoRemoved;
 		BOOST_FOREACH( bfs::path path, paths )
 		{
-//			TUTTLE_TCOUT( "path: "<< path );
 			if( bfs::exists( path ) )
 			{
-				/*
-				if( bfs::is_directory( path ) )
+				//TUTTLE_TCOUT( "exists :" << path.string() );
+				
+				if( bfs::is_directory( path ) ) // directory
 				{
-					//TUTTLE_TCOUT( "is a directory" );
-					if(recursiveListing)
-					{
-						for ( bfs::recursive_directory_iterator end, dir(path); dir != end; ++dir )
-						{
-							if( bfs::is_directory( *dir ) )
-							{
-								//TUTTLE_TCOUT( *dir );
-								std::list<boost::shared_ptr<FileObject> > listing = fileObjectsInDir( (bfs::path)*dir, filters, researchMask, descriptionMask );
-								removeFileObject( listing, pathsNoRemoved );
-							}
-						}
-					}
-					std::list<boost::shared_ptr<FileObject> > listing = fileObjectsInDir( (bfs::path)path, filters, researchMask, descriptionMask );
-					removeFileObject( listing, pathsNoRemoved );
+					Items items = sequence::parser::browse( path.string().c_str(), recursiveListing );
+					// sort to have folder after files
+					sort( items.begin(), items.end(), sortBrowseItem );
+					
+					removeFiles( items, reFilters, removeFolder, removeUnitFile, removeSequences, removeDotFile );
 				}
-				else
+				else // simple file
 				{
-					//TUTTLE_TCOUT( "is NOT a directory "<< path.branch_path() << " | "<< path.leaf() );
-					filters.push_back( path.leaf().string() );
-					std::list<boost::shared_ptr<FileObject> > listing = fileObjectsInDir( (bfs::path)path.branch_path(), filters, researchMask, descriptionMask );
-					removeFileObject( listing, pathsNoRemoved );
-				}*/
+					if( verbose )
+						TUTTLE_COUT( sam::_color._blue << path.c_str() << sam::_color._std );
+					bfs::remove( path );
+				}
 			}
 			else
 			{
-//				TUTTLE_TCOUT( "not exist ...." );
-				
 				try
 				{
-					Items items = sequence::parser::browse( path.string().c_str(), recursiveListing );
-					/*Sequence s(path.branch_path(), descriptionMask );
-					s.initFromDetection( path.string(), Sequence::ePatternDefault );
-					if( s.getNbFiles() )
-					{
-//						TUTTLE_TCOUT( s );
-						removeSequence( s );
-					}*/
+					Items items = sequence::parser::browse( path.parent_path().c_str(), false );
+					
+					boost::regex expression( path.c_str() );
+					
+					reFilters.push_back( expression );
+					removeFiles( items, reFilters, removeFolder, removeUnitFile, removeSequences, removeDotFile );
 				}
 				catch(... )
 				{
@@ -408,8 +348,6 @@ int main( int argc, char** argv )
 				}
 			}
 		}
-		// delete not empty folder the first time
-		//removeFiles( pathsNoRemoved );
 	}
 	catch (bfs::filesystem_error &ex)
 	{
