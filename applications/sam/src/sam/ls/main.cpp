@@ -28,11 +28,50 @@ namespace bal = boost::algorithm;
 namespace sam
 {
 	Color _color;
-	bool wasSthgDumped = false;
+	bool wasSthgDumped = false;	
 	
 	bool sortBrowseItem ( sequence::BrowseItem i,sequence::BrowseItem j )
 	{
-		return ( i.path.string().length() > j.path.string().length() );
+		bfs::path rootI = i.type == sequence::UNITFILE ? i.path.parent_path().string() : i.path.string() ;
+		bfs::path rootJ = j.type == sequence::UNITFILE ? j.path.parent_path().string() : j.path.string() ;
+		
+		int res = strcmp( rootI.string().c_str(), rootJ.string().c_str() );
+
+		if( res != 0 )
+		{
+			if( res > 0 )
+				return false;
+			else
+				return true;
+		}
+		else
+		{
+			bool iIsAFolder = i.type == sequence::FOLDER;
+			bool jIsAFolder = j.type == sequence::FOLDER;
+			if( iIsAFolder || jIsAFolder )
+			{
+				if( iIsAFolder && ! jIsAFolder )
+				{
+					return true;
+				}
+				if( ! iIsAFolder && jIsAFolder )
+				{
+					return false;
+				}
+				return true;
+			}
+			
+			std::string nameI =  i.type == sequence::SEQUENCE ? i.sequence.pattern.string().c_str() : i.path.filename().string() ;
+			std::string nameJ =  j.type == sequence::SEQUENCE ? j.sequence.pattern.string().c_str() : j.path.filename().string() ;
+			
+			int resName = strcmp( nameI.c_str(), nameJ.c_str() );
+			if( resName > 0 )
+				return false;
+			else
+				return true;
+		}
+		
+		return true;
 	}
 }
 
@@ -236,18 +275,78 @@ int main( int argc, char** argv )
 	
 	// build filter into regex expression
 	const std::vector<boost::regex> reFilters = convertFilterToRegex( filters );
+	const bool listSinglePath = paths.size() == 1;
 	
 	try
 	{
 		BOOST_FOREACH( bfs::path path, paths )
 		{
-			//std::cout << path.string().c_str() << std::endl;
-			Items items = sequence::parser::browse( path.string().c_str(), recursiveListing );
+			TUTTLE_TCOUT_VAR( path.string().c_str() );
+			Items items;
+			try
+			{
+				 items = sequence::parser::browse( path.string().c_str(), recursiveListing );
+			}
+			catch ( const std::exception& ex)
+			{
+				if( path.has_parent_path() )
+				{
+					std::string filename = path.filename().string();
+					filters.push_back( filename);
+					bfs::path root = path.parent_path();
+					TUTTLE_TCOUT_VAR2( path.string(), filename );
+					items = sequence::parser::browse( root.string().c_str(), false );
+					
+					Items newItems;
+					
+					for( Items::iterator item = items.begin(); item != items.end(); item++ )
+					{
+						switch( (*item).type )
+						{
+							case sequence::FOLDER:
+							case sequence::UNITFILE:
+							{
+								//TUTTLE_COUT( (*item).path.string() << "-\t-" << path.string()<< "-" );
+								if( strcmp( (*item).path.string().c_str(), path.string().c_str() ) == 0 )
+								{
+									newItems.push_back( *item );
+								}
+								break;
+							}
+							case sequence::SEQUENCE:
+							{
+								const sequence::Sequence &sequence = (*item).sequence;
+								//TUTTLE_TCOUT_VAR3( sequence.pattern.string().c_str(), filename.c_str(), path.string().c_str() );
+								if( strcmp( sequence.pattern.string().c_str(), filename.c_str() ) == 0 )
+								{
+									newItems.push_back( *item );
+								}
+								break;
+							}
+							case sequence::UNDEFINED:
+							{
+								break;
+							}
+						}
+					}
+
+					if( newItems.size() == 0 )
+					{
+						TUTTLE_CERR( _color._error << "No such file or directory with this name." << _color._std );
+						return -1;
+					}
+					
+					path = root;
+					items.clear();
+					items = newItems;
+				}
+			}
+
 			sort( items.begin(), items.end(), sortBrowseItem );
-			
+
 			std::string f = path.make_preferred().string();
 			
-			int removeInitialPath = f.length();
+			size_t removeInitialPath = f.length();
 			
 			if( strcmp( path.make_preferred().string().c_str(), "/" ) == 0 )
 				removeInitialPath = 0;
@@ -255,11 +354,18 @@ int main( int argc, char** argv )
 			if( path.make_preferred().string().at( f.length() - 1 ) != '/' )
 				removeInitialPath += 1;
 			
+			if( !listSinglePath )
+				TUTTLE_COUT( path.string() << ":" );
+			
 			for( Items::iterator item = items.begin(); item != items.end(); item++ )
 			{
 				bfs::path p = (*item).path;
 				std::string itemPath = (*item).path.make_preferred().string();
-				itemPath.erase( itemPath.begin(), itemPath.begin() + removeInitialPath );
+				
+				if( removeInitialPath >= itemPath.length() )
+					itemPath.clear();
+				else
+					itemPath.erase( itemPath.begin(), itemPath.begin() + removeInitialPath );
 				
 				//std::cout << removeInitialPath << "  " << p.string().c_str() << " => " << itemPath << "."<< std::endl;
 				if( listRelativePath )
@@ -277,9 +383,9 @@ int main( int argc, char** argv )
 				{
 					case sequence::FOLDER:
 					{
-						if( listFolder && ( listDotFile || !isDotFilename( p ) ) && ! isFilteredFilename( p.string(), reFilters ) )
+						if( ( recursiveListing && ! listAbsolutePath ) || ( listFolder && ( listDotFile || !isDotFilename( p ) ) && ! isFilteredFilename( p.string(), reFilters ) ) )
 						{
-							std::cout << ( listLongListing ? "d " : "") << _color._blue << itemPath << "/" << _color._std << std::endl;
+							TUTTLE_COUT( ( listLongListing ? "d " : "") << _color._blue << itemPath << "/" << _color._std );
 							wasSthgDumped = true;
 						}
 						break;
@@ -288,7 +394,12 @@ int main( int argc, char** argv )
 					{
 						if( listUnitFile && ( listDotFile || !isDotFilename( p ) ) && ! isFilteredFilename( p.string(), reFilters ) )
 						{
-							std::cout << ( listLongListing ? "f " : "" ) << _color._green << itemPath << _color._std << std::endl;
+							bfs::path file( itemPath );
+							std::string filename = file.string();
+							if( ! listRelativePath && ! listAbsolutePath )
+								filename = file.filename().string();
+							
+							TUTTLE_COUT( ( listLongListing ? "f " : "" ) << _color._green << filename << _color._std );
 							wasSthgDumped = true;
 						}
 						break;
@@ -298,7 +409,15 @@ int main( int argc, char** argv )
 						const sequence::Sequence &sequence = (*item).sequence;
 						if( !maskSequences && ( listDotFile || !isDotFilename( sequence.pattern.string() ) ) && ! isFilteredFilename( (p / sequence.pattern.string()).string(), reFilters ) )
 						{
-							std::cout << ( listLongListing ? "s " : "" ) << _color._green << itemPath << "/" << sequence.pattern.string() << _color._std;
+							std::string sequenceName;
+							if( itemPath.length() != 0 && ( listAbsolutePath || listRelativePath )  )
+							{
+								sequenceName += itemPath;
+								sequenceName += "/";
+							}
+							sequenceName += sequence.pattern.string();
+							
+							std::cout << ( listLongListing ? "s " : "" ) << _color._green << sequenceName << _color._std;
 							std::cout << ' ' << sequence.range;
 							if (sequence.step > 1)
 								std::cout << " (" << sequence.step << ')';
@@ -309,15 +428,8 @@ int main( int argc, char** argv )
 					}
 					case sequence::UNDEFINED:
 					{
-						std::cout << ( listLongListing ? "u " : "" ) << p.string() << std::endl;
+						TUTTLE_COUT( ( listLongListing ? "u " : "" ) << p.string() );
 						wasSthgDumped = true;
-						break;
-					}
-					default:
-					{
-						std::cout << ( listLongListing ? "b " : "" ) << p.string() << std::endl;
-						wasSthgDumped = true;
-						//return "!BAD_TYPE!";
 						break;
 					}
 				}
