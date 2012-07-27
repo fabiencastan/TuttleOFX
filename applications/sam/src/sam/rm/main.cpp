@@ -98,7 +98,6 @@ void removeFiles( Items &items, const std::vector<boost::regex> reFilters, bool 
 				break;
 			}
 			case sequence::UNDEFINED:
-			default:
 			{
 				std::cout << sam::_color._red << "error: undefined " << p.string() << sam::_color._std << std::endl;
 				break;
