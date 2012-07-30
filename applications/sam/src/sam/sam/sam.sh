@@ -77,17 +77,26 @@ echo -e "\n$BLUE""TODO$NC"
 function _sam_ls {
 startLine=`sam ls -h | sed -n '/TuttleOFX/='`
 endLine=`sam ls -h | sed -n '/OPTIONS/='`
-opts=`sam ls -h | sed $startLine','$endLine'd' | sed '$d' | cut -d" " -f3`
-opts+=`sam ls -h | sed $startLine','$endLine'd' | sed '$d' | grep "\[" | cut -d" " -f 5`
-opts+=`sam ls -df --enable-color=false | cut -d" " -f1 `
+#opts=`sam ls -h | sed $startLine','$endLine'd' | sed '$d' | cut -d" " -f3`
+#opts+=`sam ls -h | sed $startLine','$endLine'd' | sed '$d' | grep "\[" | cut -d" " -f 5`
+opts+=`sam ls --enable-color=false $cur | cut -d" " -f1 `
+COMPREPLY=( $(compgen -W "$opts" ) )
+}
+
+function _sam_lss {
+startLine=`sam lss -h | sed -n '/TuttleOFX/='`
+endLine=`sam lss -h | sed -n '/OPTIONS/='`
+#opts=`sam lss -h | sed $startLine','$endLine'd' | sed '$d' | cut -d" " -f3`
+#opts+=`sam lss -h | sed $startLine','$endLine'd' | sed '$d' | grep "\[" | cut -d" " -f 5`
+opts+=`sam lss -d --enable-color=false $cur | cut -d" " -f1 `
 COMPREPLY=( $(compgen -W "$opts" ) )
 }
 
 function _sam_mv {
 startLine=`sam mv -h | sed -n '/TuttleOFX/='`
 endLine=`sam mv -h | sed -n '/OPTIONS/='`
-opts=`sam mv -h | sed $startLine','$endLine'd' | sed '$d' | cut -d" " -f3`
-opts+=`sam mv -h | sed $startLine','$endLine'd' | sed '$d' | grep "\[" | cut -d" " -f 5`
+#opts=`sam mv -h | sed $startLine','$endLine'd' | sed '$d' | cut -d" " -f3`
+#opts+=`sam mv -h | sed $startLine','$endLine'd' | sed '$d' | grep "\[" | cut -d" " -f 5`
 opts+=`sam mv -df --enable-color=false | cut -d" " -f1 `
 COMPREPLY=( $(compgen -W "$opts" ) )
 }
@@ -137,6 +146,15 @@ else
     fi
     if [[ "$subcmd" == "ls" ]] ; then
       _sam_ls
+    fi
+	if [[ "$subcmd" == "lss" ]] ; then
+      _sam_lss
+    fi
+	if [[ "$subcmd" == "ll" ]] ; then
+      _sam_ls
+    fi
+	if [[ "$subcmd" == "lls" ]] ; then
+      _sam_lss
     fi
     if [[ "$subcmd" == "mv" ]] ; then
       _sam_mv
