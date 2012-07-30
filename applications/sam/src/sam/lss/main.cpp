@@ -317,7 +317,7 @@ int main( int argc, char** argv )
 							{
 								const sequence::Sequence &sequence = (*item).sequence;
 								//TUTTLE_TCOUT_VAR3( sequence.pattern.string().c_str(), filename.c_str(), path.string().c_str() );
-								if( strcmp( sequence.pattern.string().c_str(), filename.c_str() ) == 0 )
+								if( sequenceNamesMatch( sequence.pattern.string().c_str(), filename.c_str() ) )
 								{
 									newItems.push_back( *item );
 								}
