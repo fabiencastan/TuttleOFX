@@ -4,7 +4,6 @@
 #include <boost/algorithm/string/predicate.hpp>
 
 #include <string>
-#include <iostream>
 
 bool string_to_boolean( const std::string& str )
 {
@@ -53,9 +52,6 @@ bool sequenceNamesMatch( const std::string& sequenceA, const std::string& sequen
 	if( strcmp( convertprintfStyleToUsual( sequenceA ).c_str(), convertprintfStyleToUsual( sequenceB ).c_str() ) == 0 )
 		return true;
 	
-	//std::cout << removeSharpAndArobase( sequenceA ).c_str() << std::endl;
-	//std::cout << removeSharpAndArobase( sequenceB ).c_str() << std::endl;
-	
 	size_t foundA = sequenceA.find( '@' );
 	size_t foundB = sequenceB.find( '@' );
 	if( foundA != std::string::npos || foundB != std::string::npos )
@@ -63,7 +59,6 @@ bool sequenceNamesMatch( const std::string& sequenceA, const std::string& sequen
 		if( strcmp( removeSharpAndArobase( sequenceA ).c_str(), removeSharpAndArobase( sequenceB ).c_str() ) == 0 )
 			return true;
 	}
-	
 	return false;
 }
 
