@@ -399,14 +399,10 @@ int sammvcp(int argc, char** argv)
 		{
 			if( bfs::extension(srcPath).length() == 4 || bfs::extension(srcPath).length() == 5 )
 			{
-				std::string p = srcPath.string();
-				// convert printf style padding to usual style
-				convertprintfStyleToUsual( p );
-				
 				Items inputItems = sequence::parser::browse( srcPath.parent_path().string().c_str(), false ); // could never be a recurssive research
 				BOOST_FOREACH( const sequence::BrowseItem& item, inputItems )
 				{
-					if( item.type == sequence::SEQUENCE && ( strcmp( p.c_str(), ( item.path / item.sequence.pattern.string() ).string().c_str() ) == 0 ) )
+					if( item.type == sequence::SEQUENCE && sequenceNamesMatch( srcPath.string(), ( item.path / item.sequence.pattern.string() ).string() ) )
 					{
 						if( bfs::extension(dstPath).length() == 4 || bfs::extension(dstPath).length() == 5 )
 						{
