@@ -153,7 +153,16 @@ void copy_sequence( const sequence::BrowseItem seq, const sequence::SequencePatt
 			{
 				//TUTTLE_COUT( "copy " << srcPath << " -> " << dstPath );
 #ifdef SAM_MOVEFILES // copy file(s)
-				bfs::rename( srcPath, dstPath );
+				try
+				{
+					bfs::rename( srcPath, dstPath );
+				}
+				catch (...)
+				{
+					//TUTTLE_COUT( _color._error << "copy and remove file" << _color._std);
+					bfs::copy_file( srcPath, dstPath );
+					bfs::remove( srcPath );
+				}
 #else
 				bfs::copy_file( srcPath, dstPath );
 #endif
