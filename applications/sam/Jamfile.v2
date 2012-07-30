@@ -29,8 +29,8 @@ exe sam :
 ###############################################################################
 # ls
 ###############################################################################
-exe sam-ls :
-		[ glob src/sam/ls/*.cpp ]
+exe sam-lss :
+		[ glob src/sam/lss/*.cpp ]
 
 		/boost//program_options/<link>static
 		$(SEQUENCE_PARSER)/src/sequence/parser//sequence_parser/<link>static
@@ -168,6 +168,11 @@ exe sam-diff :
 alias sam-viewer : [ glob src/sam/sam/sam-viewer ] ;
 
 ###############################################################################
+# ls
+###############################################################################
+alias sam-ls : [ glob src/sam/sam/sam-ls ] ;
+
+###############################################################################
 # scripts
 ###############################################################################
 alias sam-script : [ glob
@@ -189,6 +194,7 @@ install sam-install-bins
 		sam-mv
 		sam-rm
 		sam-ls
+		sam-lss
 		sam-do
 		sam-info
 		sam-check

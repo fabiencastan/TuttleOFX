@@ -141,26 +141,26 @@ int main( int argc, char** argv )
 		bpo::store(bpo::command_line_parser(argc, argv).options(cmdline_options).positional(pod).run(), vm);
 
 		// get environment options and parse them
-		if( const char* env_ls_options = std::getenv("SAM_LS_OPTIONS") )
+		if( const char* env_lss_options = std::getenv("SAM_LSS_OPTIONS") )
 		{
-			const std::vector<std::string> vecOptions = bpo::split_unix( env_ls_options, " " );
+			const std::vector<std::string> vecOptions = bpo::split_unix( env_lss_options, " " );
 			bpo::store(bpo::command_line_parser(vecOptions).options(cmdline_options).positional(pod).run(), vm);
 		}
-		if( const char* env_ls_options = std::getenv("SAM_OPTIONS") )
+		if( const char* env_lss_options = std::getenv("SAM_OPTIONS") )
 		{
-			const std::vector<std::string> vecOptions = bpo::split_unix( env_ls_options, " " );
+			const std::vector<std::string> vecOptions = bpo::split_unix( env_lss_options, " " );
 			bpo::store(bpo::command_line_parser(vecOptions).options(cmdline_options).positional(pod).run(), vm);
 		}
 		bpo::notify(vm);
 	}
 	catch( const bpo::error& e)
 	{
-		TUTTLE_COUT("sam-ls: command line error: " << e.what() );
+		TUTTLE_COUT("sam-lss: command line error: " << e.what() );
 		exit( -2 );
 	}
 	catch(...)
 	{
-		TUTTLE_COUT("sam-ls: unknown error in command line.");
+		TUTTLE_COUT("sam-lss: unknown error in command line.");
 		exit( -2 );
 	}
 
@@ -189,9 +189,9 @@ int main( int argc, char** argv )
 	{
 		TUTTLE_COUT( _color._blue  << "TuttleOFX project [http://sites.google.com/site/tuttleofx]" << _color._std << std::endl );
 		TUTTLE_COUT( _color._blue  << "NAME" << _color._std );
-		TUTTLE_COUT( _color._green << "\tsam-ls - list directory contents" << _color._std << std::endl);
+		TUTTLE_COUT( _color._green << "\tsam-lss - list directory contents" << _color._std << std::endl);
 		TUTTLE_COUT( _color._blue  << "SYNOPSIS" << _color._std );
-		TUTTLE_COUT( _color._green << "\tsam-ls [options] [directories]" << _color._std << std::endl );
+		TUTTLE_COUT( _color._green << "\tsam-lss [options] [directories]" << _color._std << std::endl );
 		TUTTLE_COUT( _color._blue  << "DESCRIPTION" << _color._std << std::endl );
 
 		TUTTLE_COUT( "List information about the sequences, files and folders." );
