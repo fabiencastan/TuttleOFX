@@ -52,7 +52,7 @@ std::ostream& operator<<(std::ostream& os, const std::vector<T>& v)
 	return os;
 }
 
-void removeFiles( Items &items, const std::vector<boost::regex> reFilters, bool removeFolder, bool removeUnitFile, bool removeSequence, bool removeDotFile )
+void removeFiles( Items &items, const std::vector<boost::regex> reFilters, bool removeFolder, bool removeUnitFile, bool removeSequence, bool removeDotFile, const std::string& sequenceName = "" )
 {
 	for( Items::iterator item = items.begin(); item != items.end(); item++ )
 	{
@@ -83,7 +83,11 @@ void removeFiles( Items &items, const std::vector<boost::regex> reFilters, bool 
 			case sequence::SEQUENCE:
 			{
 				const sequence::Sequence &sequence = (*item).sequence;
-				if( removeSequence && ( removeDotFile || !sam::isDotFilename( sequence.pattern.string() ) ) && ! sam::isFilteredFilename( (p / sequence.pattern.string()).string(), reFilters ) )
+				if( removeSequence &&
+						( removeDotFile || !sam::isDotFilename( sequence.pattern.string() ) ) &&
+						! sam::isFilteredFilename( (p / sequence.pattern.string()).string(), reFilters ) &&
+						sequenceNamesMatch( (p / sequence.pattern.string()).string(), sequenceName )
+						)
 				{
 					if( verbose )
 						TUTTLE_COUT( sam::_color._green << (p / sequence.pattern.string()).make_preferred() << sam::_color._std );
@@ -335,11 +339,11 @@ int main( int argc, char** argv )
 				try
 				{
 					Items items = sequence::parser::browse( path.parent_path().c_str(), false );
-					
+					/*
 					boost::regex expression( path.c_str() );
+					reFilters.push_back( expression );*/
 					
-					reFilters.push_back( expression );
-					removeFiles( items, reFilters, removeFolder, removeUnitFile, removeSequences, removeDotFile );
+					removeFiles( items, reFilters, removeFolder, removeUnitFile, removeSequences, removeDotFile, path.string() );
 				}
 				catch(... )
 				{
