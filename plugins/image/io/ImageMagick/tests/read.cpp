@@ -1,5 +1,3 @@
-#include <iostream>
-#define BOOST_TEST_MODULE plugin_ImageMagick
 #include <boost/test/unit_test.hpp>
 
 #include <tuttle/host/Graph.hpp>
@@ -10,6 +8,8 @@
 #include <boost/timer.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
 
+#include <iostream>
+
 /**
  * Simple functional test, to read and write an image.
  */
@@ -17,18 +17,9 @@
 using namespace boost::unit_test;
 using namespace tuttle::host;
 
-BOOST_AUTO_TEST_SUITE( plugin_Dpx_reader )
+BOOST_AUTO_TEST_SUITE( plugin_ImageMagick_reader )
 
-BOOST_AUTO_TEST_CASE( loading_openfx_plugins )
-{
-	TUTTLE_COUT( "-------- LOADING OPENFX PLUGINS --------" );
-	Core::instance().getPluginCache().addDirectoryToPath( BOOST_PP_STRINGIZE(TUTTLE_PLUGIN_PATH) );
-	Core::instance().preload();
-	//TUTTLE_COUT( Core::instance().getImageEffectPluginCache() );
-	TUTTLE_COUT( "----------------- DONE -----------------" );
-}
-
-BOOST_AUTO_TEST_CASE( process_reader )
+BOOST_AUTO_TEST_CASE( process_reader_tif )
 {
 	TUTTLE_COUT( "******** PROCESS READER IMAGE MAGICK ********" );
 	Graph g;
@@ -38,20 +29,19 @@ BOOST_AUTO_TEST_CASE( process_reader )
 
 	TUTTLE_COUT( "--> PLUGINS CONFIGURATION" );
 
-	read.getParam( "filename" ).setValue( "data/file.dpx" );
+	read.getParam( "filename" ).setValue( "TuttleOFX-data/image/tif/Colorful_Night-en.tif" );
 	
 	TUTTLE_COUT( "--> GRAPH PROCESSING" );
 	boost::posix_time::ptime t1a(boost::posix_time::microsec_clock::local_time());
-	ComputeOptions options;
-	options._returnBuffers = true;
-	memory::MemoryCache res0 = g.compute( read, options );
+	memory::MemoryCache outputCache;
+	g.compute( outputCache, read );
 	boost::posix_time::ptime t2a(boost::posix_time::microsec_clock::local_time());
 
 	TUTTLE_COUT( "Process took: " << t2a - t1a );
 
-	std::cout << res0 << std::endl;
+	std::cout << outputCache << std::endl;
 
-	memory::CACHE_ELEMENT imgRes = res0.get( read.getName(), 0 );
+	memory::CACHE_ELEMENT imgRes = outputCache.get( read.getName(), 0 );
 
 	TUTTLE_TCOUT_VAR( imgRes->getROD() );
 	BOOST_CHECK_EQUAL( imgRes->getROD().x1, 0 );
