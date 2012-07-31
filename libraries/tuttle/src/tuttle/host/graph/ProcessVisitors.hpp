@@ -11,6 +11,7 @@
 #include <boost/graph/breadth_first_search.hpp>
 #include <boost/foreach.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
+#include <boost/unordered_map.hpp>
 
 #include <iostream>
 #include <fstream>
@@ -26,23 +27,55 @@ inline void connectClips( TGraph& graph )
 	BOOST_FOREACH( typename TGraph::edge_descriptor ed, graph.getEdges() )
 	{
 		typename TGraph::Edge& edge           = graph.instance( ed );
-		typename TGraph::Vertex& vertexSource = graph.sourceInstance( ed );
-		typename TGraph::Vertex& vertexDest   = graph.targetInstance( ed );
+		typename TGraph::Vertex& vertexOutput = graph.targetInstance( ed );
+		typename TGraph::Vertex& vertexInput  = graph.sourceInstance( ed );
 
 		TUTTLE_TCOUT( "[connectClips] " << edge );
-		TUTTLE_TCOUT( vertexSource << "->" << vertexDest );
+		TUTTLE_TCOUT( vertexOutput << " -> " << vertexInput );
 		//TUTTLE_TCOUT_VAR( edge.getInAttrName() );
 		
-		if( ! vertexDest.isFake() && ! vertexSource.isFake() )
+		if( ! vertexOutput.isFake() && ! vertexInput.isFake() )
 		{
-			INode& sourceNode = vertexSource.getProcessNode();
-			INode& destNode = vertexDest.getProcessNode();
-			sourceNode.connect( destNode, sourceNode.getAttribute( edge.getInAttrName() ) );
+			INode& outputNode = vertexOutput.getProcessNode();
+			INode& inputNode = vertexInput.getProcessNode();
+			inputNode.connect( outputNode, inputNode.getAttribute( edge.getInAttrName() ) );
 		}
 	}
 }
 
+
 namespace visitor {
+
+
+
+template<class TGraph>
+class TimeDomain : public boost::default_dfs_visitor
+{
+public:
+	typedef typename TGraph::GraphContainer GraphContainer;
+	typedef typename TGraph::Vertex Vertex;
+
+	TimeDomain( TGraph& graph )
+		: _graph( graph )
+	{}
+
+	template<class VertexDescriptor, class Graph>
+	void finish_vertex( VertexDescriptor v, Graph& g )
+	{
+		Vertex& vertex = _graph.instance( v );
+
+		TUTTLE_TCOUT( "[TimeDomain] finish_vertex " << vertex );
+		if( vertex.isFake() )
+			return;
+
+		vertex.getProcessNode().getTimeDomain( vertex.getProcessData()._timeDomain );
+		TUTTLE_TCOUT_VAR2( vertex.getProcessData()._timeDomain.min, vertex.getProcessData()._timeDomain.max );
+	}
+
+private:
+	TGraph& _graph;
+};
+
 
 /**
  * @brief Create a new version of a graph with nodes deployed over time.
@@ -56,18 +89,31 @@ public:
 	typedef typename TGraph::GraphContainer GraphContainer;
 	typedef typename TGraph::Vertex Vertex;
 	typedef typename TGraph::Edge Edge;
+	typedef typename TGraph::vertex_descriptor vertex_descriptor;
 	typedef typename TGraph::edge_descriptor edge_descriptor;
 
 	DeployTime( TGraph& graph, const OfxTime time )
 		: _graph( graph )
 		, _time( time )
-	{}
+	{
+		// clear all time informations before to fill with new values
+		BOOST_FOREACH( const vertex_descriptor vd, graph.getVertices() )
+		{
+			Vertex& v = graph.instance( vd );
+			v.clearTimeInfo();
+		}
+		BOOST_FOREACH( const edge_descriptor ed, graph.getEdges() )
+		{
+			Edge& e = graph.instance( ed );
+			e.clearTimeInfo();
+		}
+	}
 
 	template<class VertexDescriptor, class Graph>
 	void finish_vertex( VertexDescriptor v, Graph& g )
 	{
 		Vertex& vertex = _graph.instance( v );
-
+		
 		TUTTLE_TCOUT( "[DEPLOY TIME] " << vertex );
 		if( vertex.isFake() )
 		{
@@ -234,40 +280,110 @@ private:
 	
 };
 
+/**
+ * @brief Unconnect identity nodes and re-connect neightbors nodes
+ *
+ * ////////////////////////////////////////////////////////////////////////////////
+ * //        Output at time 5
+ * //          |
+ * //        Retime time -2 <-- identity node declare to use Merge at time 3
+ * //          |
+ * //        Merge at time 3 <-- identity node declare to use ReadA at time 3
+ * //        /    \
+ * //      /        \
+ * //    /            \
+ * // ReadA time 3   ReadB time 3
+ * //
+ * ////////////////////////////////////////////////////////////////////////////////
+ * // After removing identity nodes:
+ * //
+ * // Output at time 5
+ * //   |
+ * // ReadA time 3
+ * //
+ * // Retime time -2 <-- leave unconnected  
+ * // Merge at time 3 <-- leave unconnected  
+ * // ReadB time 3 <-- leave unconnected
+ * ////////////////////////////////////////////////////////////////////////////////
+ */
 template<class TGraph>
-void removeIdentityNodes( TGraph& graph, const std::vector<IdentityNodeConnection<TGraph> >& toRemove )
+void removeIdentityNodes( TGraph& graph, const std::vector<IdentityNodeConnection<TGraph> >& nodesToRemove )
 {
-	TUTTLE_IF_DEBUG(
-		TUTTLE_COUT_X( 80, "_" );
-		TUTTLE_COUT_VAR( toRemove.size() );
-		BOOST_FOREACH( const IdentityNodeConnection<TGraph>& connection, toRemove )
+//	TUTTLE_IF_DEBUG(
+//		TUTTLE_COUT_X( 80, "_" );
+//		TUTTLE_COUT_VAR( toRemove.size() );
+//		BOOST_FOREACH( const IdentityNodeConnection<TGraph>& connection, toRemove )
+//		{
+//			TUTTLE_COUT( connection._identityVertex );
+//			TUTTLE_COUT( "IN: "
+//				<< connection._identityVertex << "::" << connection._input._inputClip
+//				<< " <<-- "
+//				<< connection._input._srcNode << "::" kOfxOutputAttributeName );
+//			
+//			BOOST_FOREACH( const typename IdentityNodeConnection<TGraph>::OutputClipConnection& outputClipConnection, connection._outputs )
+//			{
+//				TUTTLE_COUT( "OUT: "
+//					<< connection._identityVertex << "::" kOfxOutputAttributeName
+//					<< " -->> "
+//					<< outputClipConnection._dstNode << "::" << outputClipConnection._dstNodeClip );
+//			}
+//		}
+//		TUTTLE_COUT_X( 80, "_" );
+//	);
+//	TUTTLE_COUT( "-- removeIdentityNodes --" );
+	typedef typename TGraph::Vertex Vertex;
+	typedef typename Vertex::Key VertexKey;
+	
+	typedef boost::unordered_map<VertexKey, const IdentityNodeConnection<TGraph>*> IdentityMap;
+	IdentityMap identityNodes;
+	
+	BOOST_FOREACH( const IdentityNodeConnection<TGraph>& connection, nodesToRemove )
+	{
+		identityNodes[connection._identityVertex] = &connection;
+	}
+	
+	BOOST_FOREACH( const IdentityNodeConnection<TGraph>& connection, nodesToRemove )
+	{
+		TUTTLE_COUT( connection._identityVertex );
+		TUTTLE_COUT( "IN: "
+			<< connection._identityVertex << "::" << connection._input._inputClip
+			<< " <<-- "
+			<< connection._input._srcNode << "::" kOfxOutputAttributeName );
+		const typename TGraph::VertexKey* searchIn = &( connection._input._srcNode );
 		{
-			TUTTLE_COUT( connection._identityVertex );
-			TUTTLE_COUT( "IN: "
-				<< connection._identityVertex << "::" << connection._input._inputClip
-				<< " <<-- "
-				<< connection._input._srcNode << "::" kOfxOutputAttributeName );
-			
-			BOOST_FOREACH( const typename IdentityNodeConnection<TGraph>::OutputClipConnection& outputClipConnection, connection._outputs )
+			// search a non-identity node to replace the connection
+			typename IdentityMap::const_iterator it = identityNodes.find( *searchIn );
+			typename IdentityMap::const_iterator itEnd = identityNodes.end();
+			while( it != itEnd )
 			{
-				TUTTLE_COUT( "OUT: "
-					<< connection._identityVertex << "::" kOfxOutputAttributeName
-					<< " -->> "
-					<< outputClipConnection._dstNode << "::" << outputClipConnection._dstNodeClip );
+				searchIn = &( it->second->_input._srcNode );
+				it = identityNodes.find( *searchIn );
 			}
 		}
-		TUTTLE_COUT_X( 80, "_" );
-	);
-//				BOOST_FOREACH( const edge_descriptor& ed, _graph.getInEdges( vd ) )
-//				{
-//					const Edge& e = _graph.instance( ed );
-//					const Vertex& in = _graph.sourceInstance( ed );
-//					_graph.connect( replaceKey,
-//					                in.getKey(),
-//					                e.getInAttrName() );
-//				}
-//				_graph.removeVertex( vd );
-}	
+		const typename TGraph::VertexKey& in = *searchIn;
+		const typename TGraph::vertex_descriptor descIn  = graph.getVertexDescriptor( in );
+		
+		// replace all input/output connections of the identity node by one edge
+		BOOST_FOREACH( const typename IdentityNodeConnection<TGraph>::OutputClipConnection& outputClipConnection, connection._outputs )
+		{
+			//TUTTLE_COUT( "OUT: "
+			//	<< connection._identityVertex << "::" kOfxOutputAttributeName
+			//	<< " -->> "
+			//	<< outputClipConnection._dstNode << "::" << outputClipConnection._dstNodeClip );
+			const typename TGraph::VertexKey& out = outputClipConnection._dstNode;
+			const std::string inAttr = outputClipConnection._dstNodeClip;
+
+			const typename TGraph::vertex_descriptor descOut = graph.getVertexDescriptor( out );
+
+			const typename TGraph::Edge e( in, out, inAttr );
+			graph.addEdge( descOut, descIn, e );
+		}
+		// Warning: We don't remove the vertex itself to not invalidate vertex_descriptors but only modify edges.
+//		graph.removeVertex( graph.getVertexDescriptor(connection._identityVertex) );
+		// remove all node connections
+		graph.clearVertex( graph.getVertexDescriptor(connection._identityVertex) );
+	}
+}
 
 template<class TGraph>
 class PreProcess1 : public boost::default_dfs_visitor
@@ -309,11 +425,11 @@ public:
 	{}
 
 	template<class VertexDescriptor, class Graph>
-	void finish_vertex( VertexDescriptor v, Graph& g )
+	void discover_vertex( VertexDescriptor v, Graph& g )
 	{
 		Vertex& vertex = _graph.instance( v );
 
-		TUTTLE_TCOUT( "[PREPROCESS 2] finish_vertex " << vertex );
+		TUTTLE_TCOUT( "[PREPROCESS 2] discover_vertex " << vertex );
 		if( vertex.isFake() )
 			return;
 
@@ -379,7 +495,7 @@ public:
 		if( !vertex.isFake() )
 		{
 			// compute local infos, need to be a real node !
-			vertex.getProcessNode().preProcess_infos( procOptions._time, procOptions._localInfos );
+			vertex.getProcessNode().preProcess_infos( vertex.getProcessDataAtTime(), procOptions._time, procOptions._localInfos );
 		}
 
 		// compute global infos for inputs
@@ -443,7 +559,8 @@ public:
 	void finish_vertex( VertexDescriptor v, Graph& g )
 	{
 		Vertex& vertex = _graph.instance( v );
-//		TUTTLE_COUT( "[PROCESS] finish_vertex " << vertex );
+		TUTTLE_TCOUT_X( 80, "_" );
+		TUTTLE_TCOUT( "[PROCESS] finish_vertex " << vertex );
 
 		// do nothing on the empty output node
 		// it's just a link to final nodes
@@ -465,7 +582,7 @@ public:
 		//std::cout << " " << quotes(vertex._name) << std::flush;
 #endif
 		
-		if( _result && vertex.getProcessDataAtTime()._finalNode )
+		if( _result && vertex.getProcessDataAtTime()._isFinalNode )
 		{
 			memory::CACHE_ELEMENT img = _cache.get( vertex._clipName + "." kOfxOutputAttributeName, vertex._data._time );
 			if( ! img.get() )
@@ -477,6 +594,8 @@ public:
 			}
 			_result->put( vertex._clipName, vertex._data._time, img );
 		}
+		
+		TUTTLE_TCOUT_X( 40, "_-" );
 	}
 
 private:

@@ -167,6 +167,7 @@ int main( int argc, char** argv )
 	{
 
 		bool continueOnError = false;
+		bool forceIdentityNodesProcess = false;
 		bool enableColor = false;
 		bool enableVerbose = false;
 		bool enableQuiet = false;
@@ -202,11 +203,12 @@ int main( int argc, char** argv )
 				bpo::options_description confOptions;
 				confOptions.add_options()
 					( kContinueOnErrorOptionString, kContinueOnErrorOptionMessage )
+					( kForceIdentityNodesProcessOptionString, kForceIdentityNodesProcessOptionMessage )
 					( kRangeOptionString, bpo::value<std::string > (), kRangeOptionMessage )
 					( kRenderScaleOptionString, bpo::value<std::string > (), kRenderScaleOptionMessage )
 					( kVerboseOptionString, kVerboseOptionMessage )
 					( kQuietOptionString, kQuietOptionMessage )
-					( kNbCoresOptionString, bpo::value<std::size_t > (), kNbCoresOptionString );
+					( kNbCoresOptionString, bpo::value<std::size_t > (), kNbCoresOptionMessage );
 
 				// describe hidden options
 				bpo::options_description hidden;
@@ -237,7 +239,6 @@ int main( int argc, char** argv )
 					// disable color, disable directory printing and set relative path by default
 					script = true;
 				}
-
 				if( samdo_vm.count( kColorOptionLongName ) && !script )
 				{
 					enableColor = true;
@@ -255,39 +256,20 @@ int main( int argc, char** argv )
 				{
 					enableQuiet = true;
 				}
-
 				if( enableColor )
 				{
 					_color.enable();
 				}
 
-				////
-
-				std::string colorOpt = "--";
-				colorOpt += kColorOptionLongName;
-				std::string scriptOpt = "--";
-				scriptOpt += kScriptOptionLongName;
-
-				if( argc < 2 ||
-				 ( ( ( argc == 2 ) && ( strcmp( argv[1], colorOpt.c_str() ) == 0 ) ) ) ||
-				 ( ( ( argc == 2 ) && ( strcmp( argv[1], scriptOpt.c_str() ) == 0 ) ) ) ||
-				 ( ( ( argc == 3 ) && ( strcmp( argv[1], colorOpt.c_str() ) == 0 ) ) && ( strcmp( argv[2], scriptOpt.c_str() ) == 0 ) ) ||
-				 ( ( ( argc == 3 ) && ( strcmp( argv[2], colorOpt.c_str() ) == 0 ) ) && ( strcmp( argv[1], scriptOpt.c_str() ) == 0 ) ) )
-					// no argument or --color or --script
-				{
-					TUTTLE_COUT( _color._red << "sam do: missing operands." << _color._std << std::endl );
-					displayHelp( infoOptions, confOptions );
-					exit( -1 );
-				}
-				////
-
+				// Display options //
+				
 				if( samdo_vm.count( kHelpOptionLongName ) )
 				{
 					displayHelp( infoOptions, confOptions );
 					exit( 0 );
 				}
 
-				if( samdo_vm.count( kExpertOptionString ) )
+				if( samdo_vm.count( kExpertOptionLongName ) )
 				{
 					displayHelp( infoOptions, confOptions, hidden );
 					exit( 0 );
@@ -305,7 +287,24 @@ int main( int argc, char** argv )
 					exit( 0 );
 				}
 
-				const std::string logFilename = ( ttl::Core::instance().getPreferences().getTuttleHomePath() / "sam do.log" ).string();
+				// Missing operand check //
+				
+				// If it's not the last display option
+				// and if there is no command argument
+				// an argument is missing.
+				if( !( samdo_vm.count( kNodesOptionLongName ) || samdo_vm.count( kNodesListOptionLongName ) ) &&
+				    cl_commands.size() == 0 )
+				{
+					// No display option and no sub-command to execute
+					TUTTLE_COUT( _color._red << "sam do: missing operand." << _color._std << std::endl );
+					displayHelp( infoOptions, confOptions );
+					exit( -1 );
+				}
+				
+				
+				// start to analyse and execute all sub-commands //
+				
+				const std::string logFilename = ( ttl::Core::instance().getPreferences().getTuttleHomePath() / "sam-do.log" ).string();
 				std::ofstream logFile( logFilename.c_str() );
 				std::streambuf* strm_buffer = std::cerr.rdbuf(); // save cerr's output buffer
 				std::cerr.rdbuf( logFile.rdbuf() ); // redirect output into the file
@@ -379,6 +378,7 @@ int main( int argc, char** argv )
 				}
 				std::cerr.rdbuf( strm_buffer ); // restore old output buffer
 				continueOnError = samdo_vm.count( kContinueOnErrorOptionLongName );
+				forceIdentityNodesProcess = samdo_vm.count( kForceIdentityNodesProcessOptionLongName );
 			}
 			catch( const boost::program_options::error& e )
 			{
@@ -897,8 +897,12 @@ int main( int argc, char** argv )
 				}
 			}
 		}
+		
+		if( nodes.size() == 0 )
+			// nothing to do!
+			exit( -1 );
 
-		// Execute the graph
+		// Setup compute options
 		ttl::ComputeOptions options;
 		if( range.size() >= 2 )
 		{
@@ -910,9 +914,11 @@ int main( int argc, char** argv )
 			options._renderScale.y = renderscale[1];
 		}
 		options._continueOnError = continueOnError;
+		options._forceIdentityNodesProcess = forceIdentityNodesProcess;
 		options._returnBuffers = false;
-		if( nodes.size() > 0 )
-			graph.compute( *nodes.back(), options );
+		
+		// Execute the graph
+		graph.compute( *nodes.back(), options );
 	}
 	catch( const tuttle::exception::Common& e )
 	{

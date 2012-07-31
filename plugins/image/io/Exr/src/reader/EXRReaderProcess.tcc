@@ -150,7 +150,7 @@ void EXRReaderProcess<View>::readImage( DView dst, const std::string& filepath )
 
 	// Get number of output components
 	
-	TUTTLE_COUT_VAR(params._outComponents);
+	TUTTLE_TCOUT_VAR(params._outComponents);
 	switch( (EParamReaderChannel)params._outComponents )
 	{
 		case eParamReaderChannelGray:

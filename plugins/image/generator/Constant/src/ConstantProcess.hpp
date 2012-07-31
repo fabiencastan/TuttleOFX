@@ -30,15 +30,14 @@ class ConstantProcess : public ImageGilProcessor<View>
 {
 public:
 	typedef typename View::value_type Pixel;
-	typedef terry::generator::ConstantFunctor<Pixel> ConstantFunctorT;
-	typedef typename ConstantFunctorT::point_t Point;
-	typedef boost::gil::virtual_2d_locator<ConstantFunctorT, false> Locator;
-	typedef boost::gil::image_view<Locator> ConstantVirtualView;
+	typedef typename View::point_t Point;
+	typedef typename terry::generator::ConstantColorViewFactory<Pixel>::ConstantVirtualView ConstantVirtualView;
 
 protected:
 	ConstantPlugin&     _plugin;        ///< Rendering plugin
-	ConstantVirtualView _srcView;       ///< Source view
-
+	
+	ConstantParams<View> _params;
+	
 public:
 	ConstantProcess( ConstantPlugin& instance );
 

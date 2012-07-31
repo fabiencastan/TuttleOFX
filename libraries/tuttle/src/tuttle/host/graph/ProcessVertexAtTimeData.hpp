@@ -12,6 +12,8 @@ namespace tuttle {
 namespace host {
 namespace graph {
 
+class ProcessEdgeAtTime;
+
 class ProcessVertexAtTimeInfo
 {
 typedef ProcessVertexAtTimeInfo This;
@@ -44,7 +46,7 @@ public:
 	ProcessVertexAtTimeData()
 		: _nodeData( NULL )
 		, _time( 0 )
-		, _finalNode( false )
+		, _isFinalNode( false )
 		, _outDegree( 0 )
 		, _inDegree( 0 )
 	{
@@ -54,7 +56,7 @@ public:
 	ProcessVertexAtTimeData( const ProcessVertexData& nodeData, const OfxTime time )
 		: _nodeData( &nodeData )
 		, _time( time )
-		, _finalNode( false )
+		, _isFinalNode( false )
 		, _outDegree( 0 )
 		, _inDegree( 0 )
 	{
@@ -70,8 +72,10 @@ public:
 
 	This& operator=( const This& v )
 	{
+		_nodeData = v._nodeData;
+		
 		_time = v._time;
-		_finalNode = v._finalNode;
+		_isFinalNode = v._isFinalNode;
 		_outDegree = v._outDegree;
 		_inDegree = v._inDegree;
 		_localInfos = v._localInfos;
@@ -90,8 +94,11 @@ public:
 	const ProcessVertexData* _nodeData;
 
 	OfxTime _time;
-	bool _finalNode;
+	bool _isFinalNode;
 
+	std::vector<const ProcessEdgeAtTime*> _inEdges;
+	std::vector<const ProcessEdgeAtTime*> _outEdges;
+	
 	std::size_t _outDegree; ///< number of connected input clips
 	std::size_t _inDegree; ///< number of nodes using the output of this node
 

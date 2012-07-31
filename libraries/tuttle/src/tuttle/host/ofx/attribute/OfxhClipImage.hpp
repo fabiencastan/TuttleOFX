@@ -52,7 +52,7 @@ public:
 	virtual OfxhClipImage* clone() const                    = 0;
 	virtual std::string    getFullName() const              = 0;
 	virtual std::string    getConnectedClipFullName() const = 0; ///< @todo tuttle: remove this!
-	virtual std::string    getIdentifier() const = 0;
+	virtual std::string    getClipIdentifier() const = 0;
 
 	/**
 	 * get a handle on the clip descriptor for the C api
@@ -88,6 +88,16 @@ public:
 		const std::string& s = getBitDepthString();
 
 		return imageEffect::mapBitDepthStringToEnum( s );
+	}
+	
+	std::size_t getBitDepthMemorySize() const
+	{
+		return imageEffect::bitDepthMemorySize( getBitDepth() );
+	}
+	
+	std::size_t getPixelMemorySize() const
+	{
+		return getBitDepthMemorySize() * getNbComponents();
 	}
 
 	/** set the current pixel depth
@@ -178,14 +188,18 @@ public:
 	 * set the current set of components
 	 * called by clip preferences action
 	 */
-	void setComponents( const std::string& s, const property::EModifiedBy modifiedBy = property::eModifiedByHost )
+	void setComponentsString( const std::string& s, const property::EModifiedBy modifiedBy = property::eModifiedByHost )
 	{
 		property::String& prop = getEditableProperties().fetchLocalStringProperty( kOfxImageEffectPropComponents );
 
 		prop.setValue( s, 0, modifiedBy );
 	}
-
-	void setComponentsIfNotModifiedByPlugin( const std::string& s )
+	void setComponents( const imageEffect::EPixelComponent& comp, const property::EModifiedBy modifiedBy = property::eModifiedByHost )
+	{
+		setComponentsString( imageEffect::mapPixelComponentEnumToString( comp ), modifiedBy );
+	}
+	
+	void setComponentsStringIfNotModifiedByPlugin( const std::string& s )
 	{
 		property::String& prop = getEditableProperties().fetchLocalStringProperty( kOfxImageEffectPropComponents );
 
