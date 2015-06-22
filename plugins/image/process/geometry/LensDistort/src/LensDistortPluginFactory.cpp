@@ -90,12 +90,11 @@ void LensDistortPluginFactory::describeInContext( OFX::ImageEffectDescriptor& de
 
         OFX::ChoiceParamDescriptor* lensType = desc.defineChoiceParam( kParamLensType );
         lensType->setLabel( "Lens type" );
-        lensType->appendOption( kParamLensTypeStandard );
+        lensType->appendOption( kParamLensTypeBrown1 );
+        lensType->appendOption( kParamLensTypeBrown3 );
         #ifndef TUTTLE_PRODUCTION
         lensType->appendOption( kParamLensTypeFishEye ); // not implemented yet...
         lensType->appendOption( kParamLensTypeAdvanced ); // not implemented yet...
-		#else
-        lensType->setIsSecret( true );
         #endif
         lensType->setDefault( 0 );
 
